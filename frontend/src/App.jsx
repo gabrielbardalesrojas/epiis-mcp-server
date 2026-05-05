@@ -1325,8 +1325,6 @@ const CLOUD_MODEL_OPTIONS = [
   { value: 'kimi-k2.5', label: 'Kimi K2.5 — Contexto Masivo' },
   { value: 'qwen3-coder:480b-cloud', label: 'Qwen3 Coder — Tareas Técnicas' },
   { value: 'gemini-3-flash-preview', label: 'Gemini Flash — Eficiencia y Rapidez' },
-  { value: 'llama3.3:70b-cloud', label: 'Llama 3.3 (70B) — Propósito General' },
-  { value: 'mistral:latest-cloud', label: 'Mistral (Latest)' },
   { value: 'custom', label: 'Otro (Escribir manual)...' },
 ];
 const CLOUD_KNOWN_MODELS = new Set(CLOUD_MODEL_OPTIONS.map((o) => o.value).filter((v) => v !== 'custom'));
