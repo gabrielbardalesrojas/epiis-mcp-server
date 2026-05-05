@@ -273,38 +273,85 @@ export class OllamaService {
    * @yields {string}
    */
   async *generateStream(prompt, options = {}) {
-    if (!this._circuitBreaker.isClosed()) {
-      yield '⚠️ El servicio de IA (Ollama) no está respondiendo. Por favor, verifica que Ollama esté abierto y con el modelo cargado.';
+    const isCloud = this.mode === AI_MODES.CLOUD;
+    
+    // El circuit breaker solo bloquea si estamos en modo LOCAL o AUTO (intento local)
+    if (!isCloud && !this._circuitBreaker.isClosed()) {
+      yield '⚠️ El motor Ollama local no responde. Verifica que la aplicación Ollama esté abierta en tu sistema.';
       return;
     }
 
     const { messages: msgArray, ...restOptions } = options;
 
     try {
-      if (msgArray?.length > 0) {
-        const stream = await this.ollama.chat({
-          model: this.getActiveModel(),
-          messages: msgArray,
-          ...this.defaultOptions,
-          ...restOptions,
-          stream: true,
-        });
-        for await (const chunk of stream) yield chunk.message?.content ?? '';
+      if (isCloud) {
+        // --- LÓGICA CLOUD STREAMING ---
+        yield* this._generateStreamCloud(prompt, options);
       } else {
-        const stream = await this.ollama.generate({
-          model: this.getActiveModel(),
-          prompt,
-          ...this.defaultOptions,
-          ...restOptions,
-          stream: true,
-        });
-        for await (const chunk of stream) yield chunk.response;
+        // --- LÓGICA LOCAL STREAMING ---
+        if (msgArray?.length > 0) {
+          const stream = await this.ollama.chat({
+            model: this.providers[AI_MODES.LOCAL].model,
+            messages: sanitizeMessages(msgArray),
+            ...this.defaultOptions,
+            ...restOptions,
+            stream: true,
+          });
+          for await (const chunk of stream) yield chunk.message?.content ?? '';
+        } else {
+          const stream = await this.ollama.generate({
+            model: this.providers[AI_MODES.LOCAL].model,
+            prompt,
+            ...this.defaultOptions,
+            ...restOptions,
+            stream: true,
+          });
+          for await (const chunk of stream) yield chunk.response;
+        }
+        this._circuitBreaker.reset();
       }
-
-      this._circuitBreaker.reset();
     } catch (error) {
-      this._circuitBreaker.trip();
-      this.logger.error('Error en streaming', error);
+      if (!isCloud) this._circuitBreaker.trip();
+      this.logger.error(`Error en streaming (${isCloud ? 'Cloud' : 'Local'})`, error);
+      
+      const errorMsg = error.response?.data?.error?.message || error.message;
+      yield `❌ Error de conexión con la IA (${isCloud ? 'Nube' : 'Local'}): ${errorMsg}`;
+    }
+  }
+
+  /** Generador auxiliar para streaming en la nube usando axios. */
+  async *_generateStreamCloud(prompt, options = {}) {
+    const p = this.providers[AI_MODES.CLOUD];
+    const { messages: msgArray } = options;
+
+    const body = msgArray?.length > 0 
+      ? { model: p.model, messages: sanitizeMessages(msgArray), stream: true }
+      : { model: p.model, prompt, stream: true };
+
+    const endpoint = msgArray?.length > 0 ? '/api/chat' : '/api/generate';
+
+    try {
+      const response = await axios.post(`${p.host}${endpoint}`, body, {
+        headers: buildAuthHeaders(p.apiKey),
+        responseType: 'stream',
+        timeout: DEFAULTS.CLOUD_TIMEOUT_GEN_MS,
+      });
+
+      // Procesar el stream de Ollama (línea por línea JSON)
+      for await (const chunk of response.data) {
+        const lines = chunk.toString().split('\n').filter(l => l.trim());
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line);
+            const content = parsed.message?.content || parsed.response || '';
+            if (content) yield content;
+            if (parsed.done) return;
+          } catch (e) {
+            // Ignorar líneas parciales o malformadas
+          }
+        }
+      }
+    } catch (error) {
       throw error;
     }
   }
