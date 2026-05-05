@@ -42,9 +42,6 @@ const DEFAULT_SETTINGS = Object.freeze({
   temperature: 0.3,
   aiMode: 'local',
   cloudModel: 'llama-3.3-70b-versatile',
-  cloudHost: 'https://ollama.com/',
-  cloudApiKey: '',
-  groqApiKey: '',
   darkMode: false,
 });
 
@@ -1884,10 +1881,7 @@ function App() {
     api.post('/settings/ai', {
       mode: settings.aiMode,
       cloudConfig: {
-        host: settings.cloudHost,
         model: settings.cloudModel,
-        apiKey: settings.cloudApiKey,
-        groqApiKey: settings.groqApiKey,
       },
     }).catch((e) => console.error('Error syncing AI mode:', e));
   }, [settings]);
@@ -1913,7 +1907,15 @@ function App() {
       openGenerator: () => setGeneratorModalOpen(true),
       openUpload: () => setUploadModalOpen(true),
       openSettings: () => setSettingsModalOpen(true),
-      authError: () => { handleGoogleLogout(); setSettingsModalOpen(true); },
+      authError: (e) => {
+        // Si el error es específicamente de chat, cerrar sesión de chat
+        if (e.detail?.error === 'Token inválido o expirado' || e.detail?.isChatError) {
+          handleChatLogout();
+        } else {
+          handleGoogleLogout();
+        }
+        setSettingsModalOpen(true);
+      },
     };
     Object.entries(handlers).forEach(([e, h]) => window.addEventListener(e, h));
 

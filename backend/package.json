@@ -8,6 +8,7 @@
     "start": "node src/mcp/server.js",
     "dev": "nodemon src/mcp/server.js",
     "api": "node src/app.js",
+    "api:dev": "nodemon src/app.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest --forceExit",
     "setup": "node scripts/setup.js",
     "index-docs": "node ../scripts/index-documents.js",
