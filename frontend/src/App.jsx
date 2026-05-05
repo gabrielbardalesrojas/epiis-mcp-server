@@ -10,7 +10,8 @@ import {
   Menu, X, Zap, ChevronDown, Folder, Library, Bell, HelpCircle,
   ArrowRight, Globe, File, Mail, Info, User, Paperclip,
   SendHorizontal, Copy, Check, PanelLeftClose, PanelLeftOpen,
-  RefreshCcw, Table, Presentation, Download, LayoutGrid, List
+  RefreshCcw, Table, Presentation, Download, LayoutGrid, List,
+  LogOut, Lock, Eye, EyeOff
 } from 'lucide-react';
 import api from './services/api';
 import AdminPanel from './pages/AdminPanel';
@@ -21,6 +22,8 @@ const CHAT_HISTORY_KEY = 'chat_history';
 const SETTINGS_KEY = 'epiis_settings';
 const USER_KEY = 'epiis_user';
 const TOKEN_KEY = 'epiis_token';
+const CHAT_USER_KEY = 'epiis_chat_user';
+const CHAT_TOKEN_KEY = 'epiis_chat_token';
 const SIDEBAR_POLL_MS = 30_000;
 const STATUS_POLL_MS = 30_000;
 const WA_POLL_MS = 6_000;
@@ -199,6 +202,11 @@ const readLocalStorage = (key, fallback) => {
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem(TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const getChatAuthHeaders = () => {
+  const token = localStorage.getItem(CHAT_TOKEN_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -401,7 +409,7 @@ const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onToggle }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
-const Header = memo(function Header({ serverStatus, onMenuClick, onUploadClick, onFolderClick }) {
+const Header = memo(function Header({ serverStatus, onMenuClick, onUploadClick, onFolderClick, chatUser, onChatLogout }) {
   return (
     <header className="header">
       <div className="header-left">
@@ -427,10 +435,135 @@ const Header = memo(function Header({ serverStatus, onMenuClick, onUploadClick, 
         <div className="header-separator" />
         <button className="header-btn" onClick={onUploadClick} title="Subir Archivo"><Plus size={20} /></button>
         <button className="header-btn" onClick={onFolderClick} title="Biblioteca de Archivos"><Folder size={20} /></button>
+        {chatUser && (
+          <div className="header-separator" />
+        )}
+        {chatUser && (
+          <div className="header-user-badge">
+            <div className="header-user-avatar">{(chatUser.full_name || chatUser.username || '?')[0].toUpperCase()}</div>
+            <span className="header-user-name">{chatUser.full_name || chatUser.username}</span>
+            <button className="header-btn" onClick={onChatLogout} title="Cerrar Sesión"><LogOut size={18} /></button>
+          </div>
+        )}
       </div>
     </header>
   );
 });
+
+// ─── ChatLoginScreen ──────────────────────────────────────────────────────────
+
+function ChatLoginScreen({ onLogin }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) return;
+    setError('');
+    setLoading(true);
+
+    try {
+      const { data } = await api.post('/chat-auth/login', { username, password });
+      if (data.success) {
+        localStorage.setItem(CHAT_TOKEN_KEY, data.token);
+        localStorage.setItem(CHAT_USER_KEY, JSON.stringify(data.user));
+        onLogin(data.user);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al iniciar sesión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="chat-login-screen">
+      <div className="chat-login-bg">
+        <div className="chat-login-orb orb-1" />
+        <div className="chat-login-orb orb-2" />
+        <div className="chat-login-orb orb-3" />
+      </div>
+
+      <div className="chat-login-card">
+        <div className="chat-login-header">
+          <div className="chat-login-logo-circle">
+            <GraduationCap size={32} />
+          </div>
+          <h1 className="chat-login-title">Selva Inteligente</h1>
+          <p className="chat-login-subtitle">Asistente Académico FIIS · UNAS</p>
+        </div>
+
+        {error && (
+          <div className="chat-login-error">
+            <span>⚠️</span> {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="chat-login-form">
+          <div className="chat-login-field">
+            <label htmlFor="chat-username">
+              <User size={16} />
+              <span>Usuario</span>
+            </label>
+            <input
+              id="chat-username"
+              type="text"
+              placeholder="Ingresa tu usuario"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoFocus
+              autoComplete="username"
+            />
+          </div>
+
+          <div className="chat-login-field">
+            <label htmlFor="chat-password">
+              <Lock size={16} />
+              <span>Contraseña</span>
+            </label>
+            <div className="chat-login-password-wrap">
+              <input
+                id="chat-password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="chat-login-eye-btn"
+                onClick={() => setShowPassword((p) => !p)}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="chat-login-submit"
+            disabled={loading || !username.trim() || !password.trim()}
+          >
+            {loading ? (
+              <><div className="loading-spinner-tiny" style={{ borderTopColor: '#fff' }} /> Verificando...</>
+            ) : (
+              <><Lock size={16} /> Iniciar Sesión</>
+            )}
+          </button>
+        </form>
+
+        <div className="chat-login-footer">
+          <p>Solicita tus credenciales al administrador del sistema</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── ChatPage ─────────────────────────────────────────────────────────────────
 
@@ -520,7 +653,7 @@ function ChatPage() {
         context: messages.slice(-CHAT_CONTEXT_LEN),
         useDocuments: true,
         transientContext,
-      });
+      }, { headers: getChatAuthHeaders() });
       setMessages((prev) => [...prev, {
         role: 'assistant',
         content: data.response,
@@ -1721,12 +1854,31 @@ function App() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [serverStatus, setServerStatus] = useState({ server: false, ollama: false });
 
-  // Auth
+  // Auth (Google — para WhatsApp)
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem(USER_KEY);
     const token = localStorage.getItem(TOKEN_KEY);
     return saved && token ? JSON.parse(saved) : null;
   });
+
+  // Auth (Chat — para acceso al asistente)
+  const [chatUser, setChatUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_USER_KEY);
+      const token = localStorage.getItem(CHAT_TOKEN_KEY);
+      return saved && token ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  const handleChatLogin = useCallback((user) => {
+    setChatUser(user);
+  }, []);
+
+  const handleChatLogout = useCallback(() => {
+    localStorage.removeItem(CHAT_TOKEN_KEY);
+    localStorage.removeItem(CHAT_USER_KEY);
+    setChatUser(null);
+  }, []);
 
   // WhatsApp
   const [whatsappStatus, setWhatsappStatus] = useState('disconnected');
@@ -1910,61 +2062,67 @@ function App() {
       <Routes>
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="*" element={
-          <div className="app-layout">
-            {sidebarOpen && (
-              <div className="sidebar-overlay visible" onClick={() => setSidebarOpen(false)} />
-            )}
+          !chatUser ? (
+            <ChatLoginScreen onLogin={handleChatLogin} />
+          ) : (
+            <div className="app-layout">
+              {sidebarOpen && (
+                <div className="sidebar-overlay visible" onClick={() => setSidebarOpen(false)} />
+              )}
 
-            <Sidebar
-              isOpen={sidebarOpen}
-              onClose={() => setSidebarOpen(false)}
-              isCollapsed={sidebarCollapsed}
-              onToggle={toggleSidebar}
-            />
-
-            <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-              <Header
-                serverStatus={serverStatus}
-                onMenuClick={() => setSidebarOpen(true)}
-                onUploadClick={() => setUploadModalOpen(true)}
-                onFolderClick={() => setFilesModalOpen(true)}
+              <Sidebar
+                isOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
+                isCollapsed={sidebarCollapsed}
+                onToggle={toggleSidebar}
               />
 
-              <Routes>
-                <Route path="/" element={<ChatPage />} />
-              </Routes>
+              <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+                <Header
+                  serverStatus={serverStatus}
+                  onMenuClick={() => setSidebarOpen(true)}
+                  onUploadClick={() => setUploadModalOpen(true)}
+                  onFolderClick={() => setFilesModalOpen(true)}
+                  chatUser={chatUser}
+                  onChatLogout={handleChatLogout}
+                />
 
-              <UploadModal
-                isOpen={uploadModalOpen}
-                onClose={() => setUploadModalOpen(false)}
-                onUploadSuccess={() => setUploadModalOpen(false)}
-              />
-              <FilesModal
-                isOpen={filesModalOpen}
-                onClose={() => setFilesModalOpen(false)}
-              />
-              <GeneratorModal
-                isOpen={generatorModalOpen}
-                onClose={() => setGeneratorModalOpen(false)}
-              />
-              <SettingsModal
-                isOpen={settingsModalOpen}
-                onClose={() => setSettingsModalOpen(false)}
-                settings={settings}
-                onSettingsChange={setSettings}
-                serverStatus={serverStatus}
-                currentUser={currentUser}
-                onGoogleLogin={initGoogleAuth}
-                onGoogleLogout={handleGoogleLogout}
-                whatsappStatus={whatsappStatus}
-                whatsappQR={whatsappQR}
-                onWhatsAppInit={handleWhatsAppInit}
-                onWhatsAppDisconnect={handleWhatsAppDisconnect}
-                waLoading={waLoading}
-                setWaLoading={setWaLoading}
-              />
+                <Routes>
+                  <Route path="/" element={<ChatPage />} />
+                </Routes>
+
+                <UploadModal
+                  isOpen={uploadModalOpen}
+                  onClose={() => setUploadModalOpen(false)}
+                  onUploadSuccess={() => setUploadModalOpen(false)}
+                />
+                <FilesModal
+                  isOpen={filesModalOpen}
+                  onClose={() => setFilesModalOpen(false)}
+                />
+                <GeneratorModal
+                  isOpen={generatorModalOpen}
+                  onClose={() => setGeneratorModalOpen(false)}
+                />
+                <SettingsModal
+                  isOpen={settingsModalOpen}
+                  onClose={() => setSettingsModalOpen(false)}
+                  settings={settings}
+                  onSettingsChange={setSettings}
+                  serverStatus={serverStatus}
+                  currentUser={currentUser}
+                  onGoogleLogin={initGoogleAuth}
+                  onGoogleLogout={handleGoogleLogout}
+                  whatsappStatus={whatsappStatus}
+                  whatsappQR={whatsappQR}
+                  onWhatsAppInit={handleWhatsAppInit}
+                  onWhatsAppDisconnect={handleWhatsAppDisconnect}
+                  waLoading={waLoading}
+                  setWaLoading={setWaLoading}
+                />
+              </div>
             </div>
-          </div>
+          )
         } />
       </Routes>
     </Router>

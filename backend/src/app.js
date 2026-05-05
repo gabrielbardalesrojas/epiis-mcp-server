@@ -11,6 +11,8 @@ import documentsRouter from './api/routes/documents.routes.js';
 import analysisRouter from './api/routes/analysis.routes.js';
 import generationRouter from './api/routes/generation.routes.js';
 import authRouter from './api/routes/auth.routes.js';
+import chatAuthRouter from './api/routes/chat-auth.routes.js';
+import { chatAuthMiddleware } from './api/routes/chat-auth.routes.js';
 import whatsappRouter from './api/routes/whatsapp.routes.js';
 import adminRouter from './api/routes/admin.routes.js';
 import whatsappService from './services/whatsapp/whatsapp.service.js';
@@ -147,11 +149,12 @@ app.use('/api/documents', documentsRouter);
 app.use('/api/analysis', analysisRouter);
 app.use('/api/generate', generationRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/chat-auth', chatAuthRouter);
 app.use('/api/whatsapp', whatsappRouter);
 app.use('/api/admin', adminRouter);
 
 // Chat endpoint principal
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', chatAuthMiddleware, async (req, res) => {
     try {
         const { message, context = [], useDocuments = true, transientContext = '' } = req.body;
 
@@ -513,7 +516,7 @@ ${cleanContent}` }
 });
 
 // Chat streaming
-app.post('/api/chat/stream', async (req, res) => {
+app.post('/api/chat/stream', chatAuthMiddleware, async (req, res) => {
     try {
         const { message, context = [] } = req.body;
 

@@ -637,6 +637,278 @@ function ChangePassword({ token, onToast }) {
     );
 }
 
+// ── Gestión de Usuarios del Chat ────────────────────────────────────
+function ChatUsersManagement({ token, onToast }) {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showResetModal, setShowResetModal] = useState(null);
+    const [newUser, setNewUser] = useState({ username: '', password: '', full_name: '', email: '' });
+    const [newPassword, setNewPassword] = useState('');
+    const [creating, setCreating] = useState(false);
+
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const loadUsers = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/admin/chat-users', { headers });
+            setUsers(res.data.users || []);
+        } catch (err) {
+            onToast('Error al cargar usuarios del chat', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { loadUsers(); }, []);
+
+    const handleCreate = async (e) => {
+        e.preventDefault();
+        setCreating(true);
+        try {
+            await api.post('/admin/chat-users', newUser, { headers });
+            onToast(`✅ Usuario "${newUser.username}" creado correctamente`, 'success');
+            setNewUser({ username: '', password: '', full_name: '', email: '' });
+            setShowCreateModal(false);
+            loadUsers();
+        } catch (err) {
+            onToast(err.response?.data?.error || 'Error al crear usuario', 'error');
+        } finally {
+            setCreating(false);
+        }
+    };
+
+    const handleToggleActive = async (user) => {
+        setActionLoading(user.id);
+        try {
+            await api.put(`/admin/chat-users/${user.id}`, {
+                full_name: user.full_name,
+                email: user.email,
+                is_active: user.is_active ? 0 : 1,
+            }, { headers });
+            onToast(`Usuario "${user.username}" ${user.is_active ? 'desactivado' : 'activado'}`, 'success');
+            loadUsers();
+        } catch (err) {
+            onToast(err.response?.data?.error || 'Error al actualizar', 'error');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        if (!newPassword || newPassword.length < 4) {
+            onToast('La contraseña debe tener al menos 4 caracteres', 'error');
+            return;
+        }
+        setActionLoading(showResetModal.id);
+        try {
+            await api.put(`/admin/chat-users/${showResetModal.id}/password`, { newPassword }, { headers });
+            onToast(`✅ Contraseña de "${showResetModal.username}" actualizada`, 'success');
+            setShowResetModal(null);
+            setNewPassword('');
+        } catch (err) {
+            onToast(err.response?.data?.error || 'Error al resetear contraseña', 'error');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleDelete = async (user) => {
+        if (!confirm(`¿Eliminar permanentemente al usuario "${user.username}"?`)) return;
+        setActionLoading(user.id);
+        try {
+            await api.delete(`/admin/chat-users/${user.id}`, { headers });
+            onToast(`🗑️ Usuario "${user.username}" eliminado`, 'success');
+            loadUsers();
+        } catch (err) {
+            onToast(err.response?.data?.error || 'Error al eliminar', 'error');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    if (loading) return <div className="admin-loading-center"><div className="admin-spinner" /></div>;
+
+    return (
+        <>
+            <div className="admin-card">
+                <div className="admin-card-header">
+                    <span className="admin-card-title">👥 Usuarios del Chat</span>
+                    <button className="admin-btn-approve" onClick={() => setShowCreateModal(true)}>+ Nuevo Usuario</button>
+                </div>
+
+                {users.length === 0 ? (
+                    <div className="admin-empty-state">
+                        <div className="admin-empty-icon">👥</div>
+                        <h3>Sin usuarios</h3>
+                        <p>Crea usuarios para que puedan acceder al chat del asistente.</p>
+                    </div>
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="admin-docs-table">
+                            <thead>
+                                <tr>
+                                    <th>Usuario</th>
+                                    <th>Nombre</th>
+                                    <th>Email</th>
+                                    <th>Estado</th>
+                                    <th>Último Login</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {users.map(user => (
+                                    <tr key={user.id}>
+                                        <td><strong>{user.username}</strong></td>
+                                        <td>{user.full_name || '—'}</td>
+                                        <td style={{ fontSize: '0.85rem', color: '#64748b' }}>{user.email || '—'}</td>
+                                        <td>
+                                            <span className={`admin-badge ${user.is_active ? 'approved' : 'rejected'}`}>
+                                                {user.is_active ? 'Activo' : 'Inactivo'}
+                                            </span>
+                                        </td>
+                                        <td style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                            {user.last_login ? formatDate(user.last_login) : 'Nunca'}
+                                        </td>
+                                        <td>
+                                            <div className="admin-actions">
+                                                <button
+                                                    className={user.is_active ? 'admin-btn-reject' : 'admin-btn-approve'}
+                                                    onClick={() => handleToggleActive(user)}
+                                                    disabled={actionLoading === user.id}
+                                                    title={user.is_active ? 'Desactivar' : 'Activar'}
+                                                >
+                                                    {user.is_active ? '⏸ Desactivar' : '▶ Activar'}
+                                                </button>
+                                                <button
+                                                    className="admin-btn-preview"
+                                                    onClick={() => { setShowResetModal(user); setNewPassword(''); }}
+                                                    title="Resetear contraseña"
+                                                >
+                                                    🔑
+                                                </button>
+                                                <button
+                                                    className="admin-btn-reject"
+                                                    onClick={() => handleDelete(user)}
+                                                    disabled={actionLoading === user.id}
+                                                    title="Eliminar usuario"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* Modal: Crear Usuario */}
+            {showCreateModal && (
+                <div className="admin-login-wrapper" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)' }}>
+                    <div className="admin-login-card" style={{ maxWidth: '440px' }}>
+                        <h2 style={{ marginBottom: '1.5rem', fontSize: '1.2rem' }}>👤 Crear Usuario del Chat</h2>
+                        <form onSubmit={handleCreate}>
+                            <div className="admin-input-group">
+                                <label>Nombre de Usuario *</label>
+                                <input
+                                    className="admin-input"
+                                    type="text"
+                                    placeholder="ej: jperez"
+                                    value={newUser.username}
+                                    onChange={e => setNewUser(p => ({ ...p, username: e.target.value }))}
+                                    required
+                                    minLength={3}
+                                />
+                            </div>
+                            <div className="admin-input-group">
+                                <label>Contraseña *</label>
+                                <input
+                                    className="admin-input"
+                                    type="text"
+                                    placeholder="Mínimo 4 caracteres"
+                                    value={newUser.password}
+                                    onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))}
+                                    required
+                                    minLength={4}
+                                />
+                            </div>
+                            <div className="admin-input-group">
+                                <label>Nombre Completo</label>
+                                <input
+                                    className="admin-input"
+                                    type="text"
+                                    placeholder="Juan Pérez"
+                                    value={newUser.full_name}
+                                    onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))}
+                                />
+                            </div>
+                            <div className="admin-input-group">
+                                <label>Correo Electrónico</label>
+                                <input
+                                    className="admin-input"
+                                    type="email"
+                                    placeholder="correo@epiis.unas.edu.pe"
+                                    value={newUser.email}
+                                    onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '1rem' }}>
+                                <button className="admin-btn-primary" type="submit" disabled={creating} style={{ flex: 1 }}>
+                                    {creating ? 'Creando...' : '✓ Crear Usuario'}
+                                </button>
+                                <button className="admin-btn-preview" type="button" onClick={() => setShowCreateModal(false)} style={{ flex: 0 }}>
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Resetear Contraseña */}
+            {showResetModal && (
+                <div className="admin-login-wrapper" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)' }}>
+                    <div className="admin-login-card" style={{ maxWidth: '400px' }}>
+                        <h2 style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>🔑 Resetear Contraseña</h2>
+                        <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#64748b' }}>
+                            Usuario: <strong>{showResetModal.username}</strong>
+                        </p>
+                        <form onSubmit={handleResetPassword}>
+                            <div className="admin-input-group">
+                                <label>Nueva Contraseña</label>
+                                <input
+                                    className="admin-input"
+                                    type="text"
+                                    placeholder="Mínimo 4 caracteres"
+                                    value={newPassword}
+                                    onChange={e => setNewPassword(e.target.value)}
+                                    required
+                                    minLength={4}
+                                    autoFocus
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '1rem' }}>
+                                <button className="admin-btn-primary" type="submit" disabled={actionLoading === showResetModal.id} style={{ flex: 1 }}>
+                                    Cambiar Contraseña
+                                </button>
+                                <button className="admin-btn-preview" type="button" onClick={() => setShowResetModal(null)} style={{ flex: 0 }}>
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
 // ── Dashboard Principal ─────────────────────────────────────────────
 function AdminDashboard({ token, adminData, onLogout, onAdminUpdate }) {
     const [activeTab, setActiveTab] = useState('pending');
@@ -666,6 +938,7 @@ function AdminDashboard({ token, adminData, onLogout, onAdminUpdate }) {
     const tabs = [
         { id: 'pending', label: 'Pendientes', icon: '📋', badge: stats.totalPending },
         { id: 'library', label: 'Biblioteca', icon: '📚' },
+        { id: 'users', label: 'Usuarios Chat', icon: '👥' },
         { id: 'history', label: 'Historial', icon: '📜' },
         { id: 'profile', label: 'Mi Perfil', icon: '👤' },
         { id: 'password', label: 'Seguridad', icon: '🔒' },
@@ -755,6 +1028,7 @@ function AdminDashboard({ token, adminData, onLogout, onAdminUpdate }) {
                         {/* View Router */}
                         {activeTab === 'pending' && <PendingDocuments token={token} onToast={showToast} />}
                         {activeTab === 'library' && <LibraryManagement token={token} onToast={showToast} />}
+                        {activeTab === 'users' && <ChatUsersManagement token={token} onToast={showToast} />}
                         {activeTab === 'history' && <HistoryDocuments token={token} onToast={showToast} />}
                         {activeTab === 'profile' && (
                             <AdminProfile

@@ -146,10 +146,26 @@ export const initializeDatabase = () => {
     )
   `);
 
+  // Tabla de usuarios del chat (autenticación para usar el asistente)
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS chat_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT DEFAULT '',
+      email TEXT DEFAULT '',
+      is_active INTEGER DEFAULT 1,
+      created_by TEXT DEFAULT 'admin',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_login DATETIME
+    )
+  `);
+
   // Índices para nuevas tablas
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_documents(status);
     CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);
+    CREATE INDEX IF NOT EXISTS idx_chat_users_username ON chat_users(username);
   `);
 
   // Seed: crear admin por defecto si no existe
@@ -160,6 +176,16 @@ export const initializeDatabase = () => {
       'INSERT INTO admin_users (username, password, name, email) VALUES (?, ?, ?, ?)'
     ).run('admin', hashedPassword, 'Administrador EPIIS', 'admin@epiis.unas.edu.pe');
     logger.info('Admin por defecto creado: admin / admin123');
+  }
+
+  // Seed: crear usuario de chat por defecto si no existe
+  const chatUserExists = database.prepare('SELECT id FROM chat_users WHERE username = ?').get('usuario');
+  if (!chatUserExists) {
+    const hashedPassword = crypto.createHash('sha256').update('usuario123').digest('hex');
+    database.prepare(
+      'INSERT INTO chat_users (username, password, full_name, email, created_by) VALUES (?, ?, ?, ?, ?)'
+    ).run('usuario', hashedPassword, 'Usuario EPIIS', 'usuario@epiis.unas.edu.pe', 'system');
+    logger.info('Usuario de chat por defecto creado: usuario / usuario123');
   }
 };
 

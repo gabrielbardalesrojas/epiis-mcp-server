@@ -426,4 +426,138 @@ router.delete('/library/:category/:filename', adminAuthMiddleware, async (req, r
     }
 });
 
+// ═════════════════════════════════════════════════════════════════════
+// GESTIÓN DE USUARIOS DEL CHAT
+// ═════════════════════════════════════════════════════════════════════
+
+// ── GET /api/admin/chat-users ────────────────────────────────────────
+router.get('/chat-users', adminAuthMiddleware, (req, res) => {
+    try {
+        const db = getDatabase();
+        const users = db.prepare(
+            'SELECT id, username, full_name, email, is_active, created_by, created_at, last_login FROM chat_users ORDER BY created_at DESC'
+        ).all();
+
+        res.json({ users, count: users.length });
+    } catch (error) {
+        logger.error('Error al listar usuarios del chat:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── POST /api/admin/chat-users ───────────────────────────────────────
+router.post('/chat-users', adminAuthMiddleware, (req, res) => {
+    try {
+        const { username, password, full_name, email } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
+        }
+        if (username.length < 3) {
+            return res.status(400).json({ error: 'El usuario debe tener al menos 3 caracteres' });
+        }
+        if (password.length < 4) {
+            return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+        }
+
+        const db = getDatabase();
+
+        // Verificar si ya existe
+        const existing = db.prepare('SELECT id FROM chat_users WHERE username = ?').get(username);
+        if (existing) {
+            return res.status(409).json({ error: `El usuario "${username}" ya existe` });
+        }
+
+        const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+        const result = db.prepare(
+            'INSERT INTO chat_users (username, password, full_name, email, created_by) VALUES (?, ?, ?, ?, ?)'
+        ).run(username, hashedPassword, full_name || '', email || '', req.admin.username);
+
+        logger.info(`Usuario de chat creado: ${username} por ${req.admin.username}`);
+
+        res.json({
+            success: true,
+            message: `Usuario "${username}" creado correctamente`,
+            user: {
+                id: result.lastInsertRowid,
+                username,
+                full_name: full_name || '',
+                email: email || '',
+                is_active: 1,
+                created_by: req.admin.username,
+            },
+        });
+    } catch (error) {
+        logger.error('Error al crear usuario de chat:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── PUT /api/admin/chat-users/:id ────────────────────────────────────
+router.put('/chat-users/:id', adminAuthMiddleware, (req, res) => {
+    try {
+        const { full_name, email, is_active } = req.body;
+        const db = getDatabase();
+
+        const user = db.prepare('SELECT id FROM chat_users WHERE id = ?').get(req.params.id);
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        db.prepare(
+            'UPDATE chat_users SET full_name = ?, email = ?, is_active = ? WHERE id = ?'
+        ).run(full_name ?? '', email ?? '', is_active ?? 1, req.params.id);
+
+        logger.info(`Usuario de chat actualizado: ID ${req.params.id} por ${req.admin.username}`);
+        res.json({ success: true, message: 'Usuario actualizado correctamente' });
+    } catch (error) {
+        logger.error('Error al actualizar usuario de chat:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── PUT /api/admin/chat-users/:id/password ───────────────────────────
+router.put('/chat-users/:id/password', adminAuthMiddleware, (req, res) => {
+    try {
+        const { newPassword } = req.body;
+        if (!newPassword || newPassword.length < 4) {
+            return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+        }
+
+        const db = getDatabase();
+        const user = db.prepare('SELECT id, username FROM chat_users WHERE id = ?').get(req.params.id);
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const hashedNew = crypto.createHash('sha256').update(newPassword).digest('hex');
+        db.prepare('UPDATE chat_users SET password = ? WHERE id = ?').run(hashedNew, req.params.id);
+
+        logger.info(`Contraseña reseteada para chat user: ${user.username} por ${req.admin.username}`);
+        res.json({ success: true, message: `Contraseña de "${user.username}" actualizada correctamente` });
+    } catch (error) {
+        logger.error('Error al resetear contraseña de chat user:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── DELETE /api/admin/chat-users/:id ─────────────────────────────────
+router.delete('/chat-users/:id', adminAuthMiddleware, (req, res) => {
+    try {
+        const db = getDatabase();
+        const user = db.prepare('SELECT id, username FROM chat_users WHERE id = ?').get(req.params.id);
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        db.prepare('DELETE FROM chat_users WHERE id = ?').run(req.params.id);
+
+        logger.info(`Usuario de chat eliminado: ${user.username} por ${req.admin.username}`);
+        res.json({ success: true, message: `Usuario "${user.username}" eliminado correctamente` });
+    } catch (error) {
+        logger.error('Error al eliminar usuario de chat:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
