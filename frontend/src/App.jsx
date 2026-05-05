@@ -1495,20 +1495,6 @@ function SettingsModal({
                 </p>
               </div>
 
-              {settings.aiMode === 'cloud' && (
-                <div className="setting-item">
-                  <label>Host / URL del Proveedor</label>
-                  <input
-                    type="text"
-                    className="settings-input"
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd', marginTop: '4px', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-primary)' }}
-                    placeholder="https://api.openai.com/v1"
-                    value={settings.cloudHost || ''}
-                    onChange={(e) => update('cloudHost', e.target.value)}
-                  />
-                  <p className="input-hint">URL del servicio de IA en la nube.</p>
-                </div>
-              )}
 
               <div className="setting-item">
                 <div className="label-row">
@@ -1527,28 +1513,13 @@ function SettingsModal({
                     <option value="auto">AUTO (Resiliente)</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="settings-divider" style={{ margin: '1.5rem 0 1rem', paddingBottom: '0.5rem', borderBottom: '1px solid #eee', color: 'var(--color-navy)', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                CREDENCIALES EXTERNAS
-              </div>
-
-              {(settings.aiMode === 'cloud' || settings.aiMode === 'auto') && (
-                <div className="setting-item">
-                  <label>Ollama Cloud API Key</label>
-                  <input
-                    type="password"
-                    className="settings-input"
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd', marginTop: '4px', backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-primary)' }}
-                    value={settings.cloudApiKey ?? ''}
-                    onChange={(e) => update('cloudApiKey', e.target.value)}
-                    placeholder="Obtenida en ollama.com/settings/keys"
-                  />
-                  <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px' }}>
-                    Requerido para modelos en la nube de Ollama.
+                {settings.aiMode === 'cloud' && (
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '8px' }}>
+                    ⚙️ La configuración del proveedor cloud (host, API key) se gestiona en el archivo <code>.env</code> del servidor.
                   </p>
-                </div>
-              )}
+                )}
+              </div>
+
 
               <div className="setting-item">
                 <div className="label-row">
