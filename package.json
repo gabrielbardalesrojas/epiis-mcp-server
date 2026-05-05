@@ -4,11 +4,13 @@
   "description": "Sistema de gestión académica EPIIS - Control centralizado",
   "scripts": {
     "install:all": "npm install --prefix backend && npm install --prefix frontend",
-    "dev": "concurrently \"npm run api:dev --prefix backend\" \"npm run dev --prefix frontend\" \"ngrok http --domain=krystina-weedier-howard.ngrok-free.dev https://localhost:3000\"",
+    "dev": "concurrently \"npm run api:dev --prefix backend\" \"npm run dev --prefix frontend\" \"npm run links\" \"ngrok http --domain=krystina-weedier-howard.ngrok-free.dev https://localhost:3000\"",
     "start": "npm run dev",
     "setup": "npm run setup --prefix backend",
     "cleanup": "bash ./cleanup.sh",
-    "reset-db": "npm run reset-db --prefix backend"
+    "reset-db": "npm run reset-db --prefix backend",
+    "ngrok:auth": "ngrok config add-authtoken",
+    "links": "node -e \"console.log('\\n🚀 ENLACES DEL PROYECTO:\\n----------------------\\n🏠 Local: http://localhost:3000\\n🌐 Publico: https://krystina-weedier-howard.ngrok-free.dev\\n----------------------\\n')\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
