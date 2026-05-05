@@ -8,7 +8,7 @@
     "start": "npm run dev",
     "setup": "npm run setup --prefix backend",
     "cleanup": "bash ./cleanup.sh",
-    "reset-db": "node reset-db.js"
+    "reset-db": "npm run reset-db --prefix backend"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
